@@ -1,13 +1,13 @@
-from fastapi import FastAPI, HTTPException, Request, Query
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse
 import requests
 import os
 
 app = FastAPI()
 
 # Configuración
-ACCESS_TOKEN = "APP_USR-7399764412139422-042622-5c8000e5a8932bbbdae5e8d418480e65-89912040"
+ACCESS_TOKEN = os.getenv("ACCESS_TOKEN", "APP_USR-7399764412139422-042622-5c8000e5a8932bbbdae5e8d418480e65-89912040")  # Debería estar en un archivo .env
 BASE_URL = 'https://render-notify-mp.onrender.com'
 
 # CORS
@@ -29,10 +29,14 @@ async def crear_pago(request: Request):
         monto = data.get("monto")
         email = data.get("email")
         
+        # Verificación de parámetros
         if not all([usuario_id, monto, email]):
             raise HTTPException(status_code=400, detail="Se requieren usuario_id, monto y email")
+
         print(f"🔧 Token MP usado: {ACCESS_TOKEN[:5]}...")  # Muestra primeros 5 chars
         print(f"🌐 Notification URL: {BASE_URL}/notificacion/")
+
+        # Datos para la creación de la preferencia de pago
         preference_data = {
             "items": [{
                 "title": f"Recarga saldo - {usuario_id}",
@@ -56,21 +60,28 @@ async def crear_pago(request: Request):
             "external_reference": usuario_id
         }
 
+        # Headers para la solicitud
         headers = {
             "Authorization": f"Bearer {ACCESS_TOKEN}",
             "Content-Type": "application/json"
         }
 
-        response = requests.post(
-            "https://api.mercadopago.com/checkout/preferences",
-            json=preference_data,
-            headers=headers
-        )
-        #Logs Temporales
-        print(f"🔧 Token MP usado: {ACCESS_TOKEN[:5]}...")  # Muestra primeros 5 chars
-        print(f"🌐 Notification URL: {BASE_URL}/notificacion/")
+        # Realizar la solicitud a la API de MercadoPago
+        try:
+            response = requests.post(
+                "https://api.mercadopago.com/checkout/preferences",
+                json=preference_data,
+                headers=headers
+            )
+            response.raise_for_status()  # Lanza excepción si la respuesta no es 2xx
+        except requests.exceptions.RequestException as e:
+            print(f"Error en la solicitud a MercadoPago: {e}")
+            raise HTTPException(status_code=500, detail="Error de comunicación con MercadoPago")
+
+        # Si la respuesta no es correcta, lanzar un error
         if response.status_code != 201:
             error_msg = response.json().get("message", "Error en MercadoPago")
+            print(f"Error al crear la preferencia: {error_msg}")
             raise HTTPException(status_code=400, detail=error_msg)
 
         return {
@@ -79,7 +90,8 @@ async def crear_pago(request: Request):
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Error en /crear_pago/: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error interno en el servidor")
 
 
 @app.post("/verificar_pago/")
@@ -87,7 +99,7 @@ async def verificar_pago(request: Request):
     try:
         # Intentar obtener JSON o parámetros de la URL
         data = await request.json() if request.headers.get("content-type") == "application/json" else request.query_params
-        payment_id = data.get("data.id") or data.get("id")  # Ajuste para recibir `data.id`
+        payment_id = data.get("data.id") or data.get("id")
         
         if not payment_id:
             raise HTTPException(status_code=400, detail="Se requiere un payment_id")
@@ -136,10 +148,10 @@ async def verificar_pago(request: Request):
 
     except Exception as e:
         print(f"❌ Error en verificar_pago: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Error interno en el servidor")
 
 
-@app.post("/notificacion/")
+@app.post("/notificacion/")  # Webhook de notificación
 async def webhook(request: Request):
     try:
         print("\n🔔 Notificación recibida")  # Debug en logs
