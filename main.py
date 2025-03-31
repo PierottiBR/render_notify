@@ -7,7 +7,7 @@ import os
 app = FastAPI()
 
 # Configuración
-ACCESS_TOKEN = os.getenv("ACCESS_TOKEN", "APP_USR-7399764412139422-042622-5c8000e5a8932bbbdae5e8d418480e65-89912040")  # Debería estar en un archivo .env
+ACCESS_TOKEN = "APP_USR-7399764412139422-042622-5c8000e5a8932bbbdae5e8d418480e65-89912040"  
 BASE_URL = 'https://render-notify-mp.onrender.com'
 
 # CORS
