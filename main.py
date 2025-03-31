@@ -81,7 +81,7 @@ async def crear_pago(request: Request):
 @app.post("/verificar_pago/")
 async def verificar_pago(request: Request):
     try:
-        data = await request.json()
+        data = await request.json() if request.headers.get("content-type") == "application/json" else request.query_params
         preference_id = data.get("preference_id")
         usuario_id = data.get("usuario_id")
         
