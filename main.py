@@ -31,7 +31,8 @@ async def crear_pago(request: Request):
         
         if not all([usuario_id, monto, email]):
             raise HTTPException(status_code=400, detail="Se requieren usuario_id, monto y email")
-
+        print(f"🔧 Token MP usado: {ACCESS_TOKEN[:5]}...")  # Muestra primeros 5 chars
+        print(f"🌐 Notification URL: {BASE_URL}/notificacion/")
         preference_data = {
             "items": [{
                 "title": f"Recarga saldo - {usuario_id}",
@@ -49,7 +50,7 @@ async def crear_pago(request: Request):
                 "pending": f"{BASE_URL}/pending"
             },
             "auto_return": "approved",
-            "notificaction_url": f"{BASE_URL}/notificacion",
+            "notification_url": f"{BASE_URL}/notificacion",
             "statement_descriptor": "RECARGAS APP",
             "binary_mode": True,
             "external_reference": usuario_id
