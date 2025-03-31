@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
 import requests
@@ -7,7 +7,7 @@ import os
 app = FastAPI()
 
 # Configuración
-ACCESS_TOKEN = "APP_USR-7399764412139422-042622-5c8000e5a8932bbbdae5e8d418480e65-89912040"
+ACCESS_TOKEN = os.getenv("MP_ACCESS_TOKEN", "APP_USR-7399764412139422-042622-5c8000e5a8932bbbdae5e8d418480e65-89912040")
 BASE_URL = os.getenv("BASE_URL", "https://render-notify-mp.onrender.com")
 
 # CORS
@@ -78,13 +78,18 @@ async def crear_pago(request: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/verificar_pago/")
-async def verificar_pago(request: Request):
+async def verificar_pago(
+    request: Request,
+    preference_id: str = Query(None),
+    usuario_id: str = Query(None)
+):
     try:
-        data = await request.json() if request.headers.get("content-type") == "application/json" else request.query_params
-        preference_id = data.get("preference_id")
-        usuario_id = data.get("usuario_id")
-        
+        data = await request.json() if request.headers.get("content-type") == "application/json" else None
+        preference_id = preference_id or data.get("preference_id") if data else None
+        usuario_id = usuario_id or data.get("usuario_id") if data else None
+
         if not all([preference_id, usuario_id]):
             raise HTTPException(status_code=400, detail="Se requieren preference_id y usuario_id")
 
@@ -94,7 +99,7 @@ async def verificar_pago(request: Request):
             f"https://api.mercadopago.com/v1/payments/search?preference_id={preference_id}",
             headers=search_headers
         )
-        
+
         if search_response.status_code != 200:
             raise HTTPException(status_code=400, detail="Error al buscar pago")
 
@@ -102,21 +107,23 @@ async def verificar_pago(request: Request):
         if not search_data.get("results"):
             return {"status": "pending", "mensaje": "Pago aún no procesado"}
 
-        payment_id = search_data["results"][0]["id"]
-        
+        payment_id = search_data["results"][0].get("id")
+        if not payment_id:
+            return {"status": "pending", "mensaje": "Pago aún no tiene ID asociado"}
+
         # Paso 2: Verificar estado del pago
         payment_response = requests.get(
             f"https://api.mercadopago.com/v1/payments/{payment_id}",
             headers=search_headers
         )
-        
+
         payment_data = payment_response.json()
         status = payment_data.get("status")
-        
+
         if status == "approved":
             monto = payment_data.get("transaction_amount", 0)
             usuarios_saldo[usuario_id] = usuarios_saldo.get(usuario_id, 0) + monto
-            
+
             # Ejecutar función de negocio
             try:
                 from funciones_ganamos import carga_ganamos
@@ -131,70 +138,40 @@ async def verificar_pago(request: Request):
                 "fecha": payment_data.get("date_approved"),
                 "metodo": payment_data.get("payment_type_id")
             }
-        
+
         return {"status": status or "pending"}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Endpoints para redirección
-@app.get("/success")
-async def success():
-    return HTMLResponse("""
-    <html><body style='font-family:Arial;text-align:center;padding:50px'>
-        <h1 style='color:#00a650'>✅ Pago Aprobado</h1>
-        <p>El saldo se ha acreditado correctamente</p>
-        <p><a href='http://localhost:8501/'>Volver a la app</a></p>
-    </body></html>
-    """)
 
-@app.get("/failure")
-async def failure():
-    return HTMLResponse("""
-    <html><body style='font-family:Arial;text-align:center;padding:50px'>
-        <h1 style='color:#ff0000'>❌ Pago Fallido</h1>
-        <p>El pago no pudo procesarse</p>
-        <p><a href='http://localhost:8501/'>Reintentar</a></p>
-    </body></html>
-    """)
-
-@app.get("/pending")
-async def pending():
-    return HTMLResponse("""
-    <html><body style='font-family:Arial;text-align:center;padding:50px'>
-        <h1 style='color:#ff8000'>⏳ Pago Pendiente</h1>
-        <p>Estamos procesando tu pago</p>
-        <p><a href='http://localhost:8501/'>Ver estado</a></p>
-    </body></html>
-    """)
-
-# Webhook
 @app.post("/notificacion/")
 async def webhook(request: Request):
     try:
-        payment_id = (await request.json()).get("data", {}).get("id")
+        data = await request.json()
+        payment_id = data.get("data", {}).get("id")
+
         if not payment_id:
             return JSONResponse(content={"status": "invalid_data"})
-        
+
         headers = {"Authorization": f"Bearer {ACCESS_TOKEN}"}
         payment_response = requests.get(
             f"https://api.mercadopago.com/v1/payments/{payment_id}",
             headers=headers
         )
-        
+
         payment_data = payment_response.json()
         if payment_data.get("status") == "approved":
             usuario_id = payment_data.get("external_reference")
             monto = payment_data.get("transaction_amount", 0)
-            
-            # Lógica de negocio aquí
-            print(f"Pago aprobado para {usuario_id} por ${monto}")
-            
+            print(f"✅ Pago aprobado para {usuario_id} por ${monto}")
+
         return JSONResponse(content={"status": "processed"})
-    
+
     except Exception as e:
-        print(f"Error en webhook: {str(e)}")
+        print(f"❌ Error en webhook: {str(e)}")
         return JSONResponse(content={"status": "error"}, status_code=500)
+
 
 @app.get("/")
 async def health_check():
