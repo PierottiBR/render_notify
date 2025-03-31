@@ -80,68 +80,59 @@ async def crear_pago(request: Request):
 
 
 @app.post("/verificar_pago/")
-async def verificar_pago(
-    request: Request,
-    preference_id: str = Query(None),
-    usuario_id: str = Query(None)
-):
+async def verificar_pago(request: Request):
     try:
-        data = await request.json() if request.headers.get("content-type") == "application/json" else None
-        preference_id = preference_id or data.get("preference_id") if data else None
-        usuario_id = usuario_id or data.get("usuario_id") if data else None
-
-        if not all([preference_id, usuario_id]):
-            raise HTTPException(status_code=400, detail="Se requieren preference_id y usuario_id")
-
-        # Paso 1: Buscar payment_id asociado
-        search_headers = {"Authorization": f"Bearer {ACCESS_TOKEN}"}
-        search_response = requests.get(
-            f"https://api.mercadopago.com/v1/payments/search?preference_id={preference_id}",
-            headers=search_headers
-        )
-
-        if search_response.status_code != 200:
-            raise HTTPException(status_code=400, detail="Error al buscar pago")
-
-        search_data = search_response.json()
-        if not search_data.get("results"):
-            return {"status": "pending", "mensaje": "Pago aún no procesado"}
-
-        payment_id = search_data["results"][0].get("id")
+        # Intentar obtener JSON o parámetros de la URL
+        data = await request.json() if request.headers.get("content-type") == "application/json" else request.query_params
+        payment_id = data.get("data.id") or data.get("id")  # Ajuste para recibir `data.id`
+        
         if not payment_id:
-            return {"status": "pending", "mensaje": "Pago aún no tiene ID asociado"}
+            raise HTTPException(status_code=400, detail="Se requiere un payment_id")
 
-        # Paso 2: Verificar estado del pago
+        # Log para depuración
+        print(f"🔍 Verificando pago con ID: {payment_id}")
+
+        # Consultar el estado del pago
+        search_headers = {"Authorization": f"Bearer {ACCESS_TOKEN}"}
         payment_response = requests.get(
             f"https://api.mercadopago.com/v1/payments/{payment_id}",
             headers=search_headers
         )
 
+        if payment_response.status_code != 200:
+            raise HTTPException(status_code=400, detail="Error al obtener información del pago")
+
         payment_data = payment_response.json()
         status = payment_data.get("status")
+        usuario_id = payment_data.get("external_reference")
+
+        if not usuario_id:
+            raise HTTPException(status_code=400, detail="No se encontró usuario_id en el pago")
+
+        print(f"📌 Estado del pago: {status}, Usuario: {usuario_id}")
 
         if status == "approved":
             monto = payment_data.get("transaction_amount", 0)
             usuarios_saldo[usuario_id] = usuarios_saldo.get(usuario_id, 0) + monto
 
-            # Ejecutar función de negocio
             try:
                 from funciones_ganamos import carga_ganamos
                 carga_ganamos(usuario=usuario_id, monto=monto)
             except Exception as e:
-                print(f"Error en carga_ganamos: {str(e)}")
+                print(f"⚠️ Error en carga_ganamos: {str(e)}")
 
             return {
                 "status": "approved",
                 "payment_id": payment_id,
                 "monto": monto,
                 "fecha": payment_data.get("date_approved"),
-                "metodo": payment_data.get("payment_type_id")
+                "metodo": payment_data.get("payment_type_id"),
             }
 
         return {"status": status or "pending"}
 
     except Exception as e:
+        print(f"❌ Error en verificar_pago: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
