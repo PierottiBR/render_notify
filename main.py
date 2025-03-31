@@ -8,7 +8,7 @@ app = FastAPI()
 
 # Configuración
 ACCESS_TOKEN = os.getenv("MP_ACCESS_TOKEN", "APP_USR-7399764412139422-042622-5c8000e5a8932bbbdae5e8d418480e65-89912040")
-BASE_URL = 'https://render-notify-mp.onrender.com/'
+BASE_URL = 'https://render-notify-mp.onrender.com'
 
 # CORS
 app.add_middleware(
@@ -50,8 +50,7 @@ async def crear_pago(request: Request):
                 "pending": f"{BASE_URL}/pending"
             },
             "auto_return": "approved",
-            "notification_url": "https://render-notify-mp.onrender.com/notificacion/",
-            #"notification_url": f"{BASE_URL}/notificacion",
+            "notification_url": f"{BASE_URL}/notificacion",
             "statement_descriptor": "RECARGAS APP",
             "binary_mode": True,
             "external_reference": usuario_id
