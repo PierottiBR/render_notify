@@ -139,29 +139,48 @@ async def verificar_pago(request: Request):
 @app.post("/notificacion/")
 async def webhook(request: Request):
     try:
-        data = await request.json()
-        payment_id = data.get("data", {}).get("id")
-
+        print("\n🔔 Notificación recibida")  # Debug en logs
+        
+        # Opción 1: Para content-type: application/json
+        try:
+            data = await request.json()
+            print(f"📦 JSON data: {data}")
+        except:
+            # Opción 2: Para x-www-form-urlencoded
+            form_data = await request.form()
+            data = dict(form_data)
+            print(f"📦 Form data: {data}")
+        
+        payment_id = data.get("data.id") or data.get("id")
         if not payment_id:
-            return JSONResponse(content={"status": "invalid_data"})
-
+            print("⚠️ No se encontró payment_id")
+            return {"status": "invalid_data"}
+        
+        print(f"🔍 Verificando pago: {payment_id}")
+        
+        # Verificar el pago
         headers = {"Authorization": f"Bearer {ACCESS_TOKEN}"}
         payment_response = requests.get(
             f"https://api.mercadopago.com/v1/payments/{payment_id}",
             headers=headers
         )
-
+        
+        if payment_response.status_code != 200:
+            error_msg = payment_response.json().get("message", "Error en MP")
+            print(f"❌ Error MP: {error_msg}")
+            return {"status": "error", "detail": error_msg}
+        
         payment_data = payment_response.json()
-        if payment_data.get("status") == "approved":
-            usuario_id = payment_data.get("external_reference")
-            monto = payment_data.get("transaction_amount", 0)
-            print(f"✅ Pago aprobado para {usuario_id} por ${monto}")
-
-        return JSONResponse(content={"status": "processed"})
-
+        print(f"📊 Estado del pago: {payment_data.get('status')}")
+        
+        return {"status": "processed"}
+        
     except Exception as e:
-        print(f"❌ Error en webhook: {str(e)}")
-        return JSONResponse(content={"status": "error"}, status_code=500)
+        print(f"🔥 Error crítico: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "detail": str(e)}
+        )
 
 
 @app.get("/")
