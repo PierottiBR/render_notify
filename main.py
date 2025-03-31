@@ -50,7 +50,8 @@ async def crear_pago(request: Request):
                 "pending": f"{BASE_URL}/pending"
             },
             "auto_return": "approved",
-            "notification_url": f"{BASE_URL}/notificacion",
+            "notification_url": "https://render-notify-mp.onrender.com/notificacion/",
+            #"notification_url": f"{BASE_URL}/notificacion",
             "statement_descriptor": "RECARGAS APP",
             "binary_mode": True,
             "external_reference": usuario_id
