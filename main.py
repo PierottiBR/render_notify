@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import requests
 import os
+from funciones_ganamos import *
+
 
 app = FastAPI()
 
@@ -196,6 +198,31 @@ async def webhook(request: Request):
             status_code=500,
             content={"status": "error", "detail": str(e)}
         )
+
+
+
+@app.post("/crear_jugador/")
+async def crear_jugador(request: Request):
+    try:
+        data = await request.json()
+        nuevo_usuario = data.get("usuario")
+        nueva_contrasenia = data.get("contrasenia")
+
+        if not nuevo_usuario or not nueva_contrasenia:
+            raise HTTPException(status_code=400, detail="Faltan campos requeridos")
+
+        # Suponiendo que tenés una función llamada nuevo_jugador
+        mensaje, lista = nuevo_jugador(nueva_contrasenia, nuevo_usuario)
+
+        return {
+            "mensaje": mensaje,
+            "usuarios": lista
+        }
+
+    except Exception as e:
+        print(f"❌ Error en crear_jugador: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error interno en el servidor")
+
 
 
 @app.get("/")
