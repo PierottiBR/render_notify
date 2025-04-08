@@ -201,7 +201,7 @@ async def webhook(request: Request):
 
 
 
-@app.post("/crear_jugador/")
+@app.post("/crear_jugador")
 async def crear_jugador(request: Request):
     try:
         data = await request.json()
