@@ -133,8 +133,8 @@ async def verificar_pago(request: Request):
             usuarios_saldo[usuario_id] = usuarios_saldo.get(usuario_id, 0) + monto
 
             try:
-                from funciones_ganamos import carga_ganamos
-                carga_ganamos(usuario=usuario_id, monto=monto)
+                from funciones_gencb import carga_genc
+                carga_genc(usuario_name=usuario_id, monto=monto)
             except Exception as e:
                 print(f"⚠️ Error en carga_ganamos: {str(e)}")
 
